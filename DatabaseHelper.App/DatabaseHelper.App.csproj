@@ -8,6 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\DatabaseHelper.Core\DatabaseHelper.Core.csproj" />
       <ProjectReference Include="..\DatabaseHelper.MsSql\DatabaseHelper.MsSql.csproj" />
     </ItemGroup>
 
