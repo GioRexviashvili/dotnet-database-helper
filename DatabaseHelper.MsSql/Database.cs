@@ -8,6 +8,7 @@ public sealed class Database : IDisposable
     private readonly string _connectionString;
     private SqlConnection? _connection;
     private SqlTransaction? _transaction;
+    private bool _disposed = false;
 
     public Database(string connectionString)
     {
@@ -16,6 +17,7 @@ public sealed class Database : IDisposable
 
     public SqlConnection GetConnection()
     {
+        CheckDisposed();
         if (_connection == null)
             _connection = new SqlConnection(_connectionString);
         return _connection;
@@ -23,6 +25,7 @@ public sealed class Database : IDisposable
 
     public void OpenConnection()
     {
+        CheckDisposed();
         SqlConnection connection = GetConnection();
         if (connection.State != ConnectionState.Open)
             connection.Open();
@@ -30,15 +33,18 @@ public sealed class Database : IDisposable
 
     public void CloseConnection()
     {
+        CheckDisposed();
         if (_transaction != null)
-            throw new InvalidOperationException("Cannot close connection while a transaction is in progress. Commit or rollback the transaction first.");
-            
+            throw new InvalidOperationException(
+                "Cannot close connection while a transaction is in progress. Commit or rollback the transaction first.");
+
         if (_connection?.State != ConnectionState.Closed)
             _connection?.Close();
     }
 
     public SqlCommand GetCommand(string commandText, CommandType commandType, params SqlParameter[] parameters)
     {
+        CheckDisposed();
         SqlCommand command = GetConnection().CreateCommand();
         command.CommandText = commandText;
         command.CommandType = commandType;
@@ -57,6 +63,7 @@ public sealed class Database : IDisposable
 
     public int ExecuteNonQuery(string commandText, CommandType commandType, params SqlParameter[] parameters)
     {
+        CheckDisposed();
         using SqlCommand command = GetCommand(commandText, commandType, parameters);
         return command.ExecuteNonQuery();
     }
@@ -66,6 +73,7 @@ public sealed class Database : IDisposable
 
     public object? ExecuteScalar(string commandText, CommandType commandType, params SqlParameter[] parameters)
     {
+        CheckDisposed();
         using SqlCommand command = GetCommand(commandText, commandType, parameters);
         return command.ExecuteScalar();
     }
@@ -75,6 +83,7 @@ public sealed class Database : IDisposable
 
     public SqlDataReader ExecuteReader(string commandText, CommandType commandType, params SqlParameter[] parameters)
     {
+        CheckDisposed();
         SqlCommand command = GetCommand(commandText, commandType, parameters);
         return command.ExecuteReader();
     }
@@ -82,10 +91,9 @@ public sealed class Database : IDisposable
     public SqlDataReader ExecuteReader(string commandText, params SqlParameter[] parameters)
         => ExecuteReader(commandText, CommandType.Text, parameters);
 
-    //todo: Add transaction support with methods like BeginTransaction, CommitTransaction, and RollbackTransaction.
-
     public void BeginTransaction()
     {
+        CheckDisposed();
         if (_transaction == null)
             _transaction = GetConnection().BeginTransaction();
         else
@@ -95,6 +103,7 @@ public sealed class Database : IDisposable
 
     public void CommitTransaction()
     {
+        CheckDisposed();
         if (_transaction == null)
             throw new InvalidOperationException(
                 "No transaction is in progress. Start a transaction before committing it.");
@@ -112,6 +121,7 @@ public sealed class Database : IDisposable
 
     public void RollbackTransaction()
     {
+        CheckDisposed();
         if (_transaction == null)
             throw new InvalidOperationException(
                 "No transaction is in progress. Start a transaction before rolling it back.");
@@ -127,9 +137,50 @@ public sealed class Database : IDisposable
         }
     }
 
-    //todo: Implement correct disposable pattern with finalizer and protected virtual Dispose(bool disposing) method.
     public void Dispose()
     {
-        _connection?.Dispose();
+        Dispose(true);
+        GC.SuppressFinalize(this); // finalizeri rom ar gaeshvas
+    }
+
+    private void Dispose(bool disposing) // tu disposing aris true anu chven vidzaxebt
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            if (_transaction != null)
+            {
+                try
+                {
+                    _transaction.Rollback();
+                }
+                catch
+                {
+                }
+
+                _transaction.Dispose();
+                _transaction = null;
+            }
+
+            if (_connection != null)
+            {
+                if (_connection.State != ConnectionState.Closed)
+                {
+                    _connection.Close();
+                }
+
+                _connection.Dispose();
+                _connection = null;
+            }
+        }
+        _disposed = true;
+    }
+    
+    private void CheckDisposed()
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(Database));
     }
 }
