@@ -1,0 +1,85 @@
+# -----------------------------
+# Build results
+# -----------------------------
+bin/
+obj/
+out/
+
+# -----------------------------
+# Rider / JetBrains
+# -----------------------------
+.idea/
+*.sln.iml
+
+# Rider user-specific files
+*.DotSettings.user
+
+# -----------------------------
+# Visual Studio (if someone opens it)
+# -----------------------------
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# -----------------------------
+# NuGet
+# -----------------------------
+*.nupkg
+*.snupkg
+.nuget/packages/
+
+# -----------------------------
+# Logs
+# -----------------------------
+*.log
+
+# -----------------------------
+# OS files
+# -----------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# -----------------------------
+# Temporary files
+# -----------------------------
+*.tmp
+*.temp
+*.cache
+
+# -----------------------------
+# Rider cache directories
+# -----------------------------
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+
+# -----------------------------
+# Test results
+# -----------------------------
+TestResults/
+*.trx
+
+# -----------------------------
+# Coverage
+# -----------------------------
+coverage/
+*.coverage
+*.coveragexml
+
+# -----------------------------
+# Publish output
+# -----------------------------
+publish/
+
+# -----------------------------
+# Local configuration
+# -----------------------------
+appsettings.Development.json
