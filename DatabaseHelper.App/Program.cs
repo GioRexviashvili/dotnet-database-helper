@@ -8,7 +8,7 @@ internal static class Program
 {
     private static void Main(string[] args)
     {
-        string connectionString = "Server=localhost,1433;Database=Northwind;User Id=sa;Password=Giorgigamer707;TrustServerCertificate=True";
+        string connectionString = "Server=localhost,1433;Database=Northwind;User Id=sa;Password=***;TrustServerCertificate=True";
 
         using (var database = new Database(connectionString))
         {
