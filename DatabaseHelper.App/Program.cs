@@ -1,9 +1,13 @@
-﻿namespace DatabaseHelper.App;
+﻿using DatabaseHelper.MsSql;
 
-class Program
+namespace DatabaseHelper.App;
+
+internal static class Program
 {
-    static void Main(string[] args)
+    private static void Main(string[] args)
     {
-        Console.WriteLine("Hello, World!");
+        Database database = new Database("");
+        var connection = database.GetConnection();
+        var command = database.GetCommand("SELECT * FROM [Table]");
     }
 }
