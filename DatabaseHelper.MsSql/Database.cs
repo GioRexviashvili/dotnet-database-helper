@@ -7,6 +7,7 @@ public sealed class Database : IDisposable
 {
     private readonly string _connectionString;
     private SqlConnection? _connection;
+    private SqlTransaction? _transaction;
 
     public Database(string connectionString)
     {
@@ -29,8 +30,11 @@ public sealed class Database : IDisposable
 
     public void CloseConnection()
     {
+        if (_transaction != null)
+            throw new InvalidOperationException("Cannot close connection while a transaction is in progress. Commit or rollback the transaction first.");
+            
         if (_connection?.State != ConnectionState.Closed)
-            _connection!.Close();
+            _connection?.Close();
     }
 
     public SqlCommand GetCommand(string commandText, CommandType commandType, params SqlParameter[] parameters)
@@ -39,6 +43,12 @@ public sealed class Database : IDisposable
         command.CommandText = commandText;
         command.CommandType = commandType;
         command.Parameters.AddRange(parameters);
+
+        if (_transaction != null)
+        {
+            command.Transaction = _transaction;
+        }
+
         return command;
     }
 
@@ -73,6 +83,49 @@ public sealed class Database : IDisposable
         => ExecuteReader(commandText, CommandType.Text, parameters);
 
     //todo: Add transaction support with methods like BeginTransaction, CommitTransaction, and RollbackTransaction.
+
+    public void BeginTransaction()
+    {
+        if (_transaction == null)
+            _transaction = GetConnection().BeginTransaction();
+        else
+            throw new InvalidOperationException(
+                "Transaction is already started. Commit or rollback the current transaction before starting a new one.");
+    }
+
+    public void CommitTransaction()
+    {
+        if (_transaction == null)
+            throw new InvalidOperationException(
+                "No transaction is in progress. Start a transaction before committing it.");
+
+        try
+        {
+            _transaction.Commit();
+        }
+        finally
+        {
+            _transaction.Dispose();
+            _transaction = null;
+        }
+    }
+
+    public void RollbackTransaction()
+    {
+        if (_transaction == null)
+            throw new InvalidOperationException(
+                "No transaction is in progress. Start a transaction before rolling it back.");
+
+        try
+        {
+            _transaction.Rollback();
+        }
+        finally
+        {
+            _transaction.Dispose();
+            _transaction = null;
+        }
+    }
 
     //todo: Implement correct disposable pattern with finalizer and protected virtual Dispose(bool disposing) method.
     public void Dispose()
