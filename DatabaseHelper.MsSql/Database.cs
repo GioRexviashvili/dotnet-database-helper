@@ -17,7 +17,7 @@ public sealed class Database : IDisposable
 
     public SqlConnection GetConnection()
     {
-        CheckDisposed();
+        ThrowIfDisposed();
         if (_connection == null)
             _connection = new SqlConnection(_connectionString);
         return _connection;
@@ -25,7 +25,7 @@ public sealed class Database : IDisposable
 
     public void OpenConnection()
     {
-        CheckDisposed();
+        ThrowIfDisposed();
         SqlConnection connection = GetConnection();
         if (connection.State != ConnectionState.Open)
             connection.Open();
@@ -33,7 +33,7 @@ public sealed class Database : IDisposable
 
     public void CloseConnection()
     {
-        CheckDisposed();
+        ThrowIfDisposed();
         if (_transaction != null)
             throw new InvalidOperationException(
                 "Cannot close connection while a transaction is in progress. Commit or rollback the transaction first.");
@@ -44,7 +44,7 @@ public sealed class Database : IDisposable
 
     public SqlCommand GetCommand(string commandText, CommandType commandType, params SqlParameter[] parameters)
     {
-        CheckDisposed();
+        ThrowIfDisposed();
         SqlCommand command = GetConnection().CreateCommand();
         command.CommandText = commandText;
         command.CommandType = commandType;
@@ -63,7 +63,7 @@ public sealed class Database : IDisposable
 
     public int ExecuteNonQuery(string commandText, CommandType commandType, params SqlParameter[] parameters)
     {
-        CheckDisposed();
+        ThrowIfDisposed();
         using SqlCommand command = GetCommand(commandText, commandType, parameters);
         return command.ExecuteNonQuery();
     }
@@ -73,7 +73,7 @@ public sealed class Database : IDisposable
 
     public object? ExecuteScalar(string commandText, CommandType commandType, params SqlParameter[] parameters)
     {
-        CheckDisposed();
+        ThrowIfDisposed();
         using SqlCommand command = GetCommand(commandText, commandType, parameters);
         return command.ExecuteScalar();
     }
@@ -83,7 +83,7 @@ public sealed class Database : IDisposable
 
     public SqlDataReader ExecuteReader(string commandText, CommandType commandType, params SqlParameter[] parameters)
     {
-        CheckDisposed();
+        ThrowIfDisposed();
         SqlCommand command = GetCommand(commandText, commandType, parameters);
         return command.ExecuteReader();
     }
@@ -93,7 +93,7 @@ public sealed class Database : IDisposable
 
     public void BeginTransaction()
     {
-        CheckDisposed();
+        ThrowIfDisposed();
         if (_transaction == null)
             _transaction = GetConnection().BeginTransaction();
         else
@@ -103,7 +103,7 @@ public sealed class Database : IDisposable
 
     public void CommitTransaction()
     {
-        CheckDisposed();
+        ThrowIfDisposed();
         if (_transaction == null)
             throw new InvalidOperationException(
                 "No transaction is in progress. Start a transaction before committing it.");
@@ -121,7 +121,7 @@ public sealed class Database : IDisposable
 
     public void RollbackTransaction()
     {
-        CheckDisposed();
+        ThrowIfDisposed();
         if (_transaction == null)
             throw new InvalidOperationException(
                 "No transaction is in progress. Start a transaction before rolling it back.");
@@ -140,47 +140,31 @@ public sealed class Database : IDisposable
     public void Dispose()
     {
         Dispose(true);
-        GC.SuppressFinalize(this); // finalizeri rom ar gaeshvas
+        GC.SuppressFinalize(this);
     }
 
-    private void Dispose(bool disposing) // tu disposing aris true anu chven vidzaxebt
+    private void Dispose(bool disposing)
     {
         if (_disposed)
             return;
 
         if (disposing)
         {
-            if (_transaction != null)
-            {
-                try
-                {
-                    _transaction.Rollback();
-                }
-                catch
-                {
-                }
-
-                _transaction.Dispose();
-                _transaction = null;
-            }
-
-            if (_connection != null)
-            {
-                if (_connection.State != ConnectionState.Closed)
-                {
-                    _connection.Close();
-                }
-
-                _connection.Dispose();
-                _connection = null;
-            }
+            _transaction?.Dispose();
+            _connection?.Dispose();
         }
+
         _disposed = true;
     }
-    
-    private void CheckDisposed()
+
+    private void ThrowIfDisposed()
     {
         if (_disposed)
             throw new ObjectDisposedException(nameof(Database));
+    }
+    
+    ~Database()
+    {
+        Dispose(false);
     }
 }
