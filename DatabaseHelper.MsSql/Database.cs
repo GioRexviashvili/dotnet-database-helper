@@ -94,47 +94,23 @@ public sealed class Database : IDisposable
     public void BeginTransaction()
     {
         ThrowIfDisposed();
-        if (_transaction == null)
-            _transaction = GetConnection().BeginTransaction();
-        else
+        if (_transaction != null)
             throw new InvalidOperationException(
                 "Transaction is already started. Commit or rollback the current transaction before starting a new one.");
+
+        _transaction = GetConnection().BeginTransaction();
     }
 
     public void CommitTransaction()
     {
         ThrowIfDisposed();
-        if (_transaction == null)
-            throw new InvalidOperationException(
-                "No transaction is in progress. Start a transaction before committing it.");
-
-        try
-        {
-            _transaction.Commit();
-        }
-        finally
-        {
-            _transaction.Dispose();
-            _transaction = null;
-        }
+        HandleTransaction(() => _transaction?.Commit());
     }
-
+    
     public void RollbackTransaction()
     {
         ThrowIfDisposed();
-        if (_transaction == null)
-            throw new InvalidOperationException(
-                "No transaction is in progress. Start a transaction before rolling it back.");
-
-        try
-        {
-            _transaction.Rollback();
-        }
-        finally
-        {
-            _transaction.Dispose();
-            _transaction = null;
-        }
+        HandleTransaction(() => _transaction?.Rollback());
     }
 
     public void Dispose()
@@ -163,6 +139,21 @@ public sealed class Database : IDisposable
             throw new ObjectDisposedException(nameof(Database));
     }
     
+    private void HandleTransaction(Action action)
+    {
+        if (_transaction == null)
+            throw new InvalidOperationException("No transaction is in progress.");
+
+        try
+        {
+            action();
+        }
+        finally
+        {
+            _transaction.Dispose();
+        }
+    }
+
     ~Database()
     {
         Dispose(false);
