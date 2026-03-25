@@ -1,19 +1,39 @@
 ﻿using System.Data;
 using Microsoft.Data.SqlClient;
+using Microsoft.IdentityModel.Tokens;
 
 namespace DatabaseHelper.MsSql;
 
 public sealed class Database : IDisposable
 {
+    #region Private Fields
+
     private readonly string _connectionString;
     private SqlConnection? _connection;
     private SqlTransaction? _transaction;
     private bool _disposed = false;
 
+    #endregion
+
+    #region Ctor
+
     public Database(string connectionString)
     {
-        _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+        ArgumentNullException.ThrowIfNull(connectionString, nameof(connectionString));
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString, nameof(connectionString));
+        _connectionString = connectionString;
     }
+
+    #endregion
+
+    #region Public Properties
+
+    public bool IsDisposed => _disposed;
+    public bool InTransaction => _transaction != null;
+
+    #endregion
+
+    #region Public Methods
 
     public SqlConnection GetConnection()
     {
@@ -45,6 +65,10 @@ public sealed class Database : IDisposable
     public SqlCommand GetCommand(string commandText, CommandType commandType, params SqlParameter[] parameters)
     {
         ThrowIfDisposed();
+
+        ArgumentNullException.ThrowIfNull(commandText);
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandText);
+
         SqlCommand command = GetConnection().CreateCommand();
         command.CommandText = commandText;
         command.CommandType = commandType;
@@ -106,7 +130,7 @@ public sealed class Database : IDisposable
         ThrowIfDisposed();
         HandleTransaction(() => _transaction?.Commit());
     }
-    
+
     public void RollbackTransaction()
     {
         ThrowIfDisposed();
@@ -118,6 +142,10 @@ public sealed class Database : IDisposable
         Dispose(true);
         GC.SuppressFinalize(this);
     }
+
+    #endregion
+
+    #region Private Methods
 
     private void Dispose(bool disposing)
     {
@@ -138,7 +166,7 @@ public sealed class Database : IDisposable
         if (_disposed)
             throw new ObjectDisposedException(nameof(Database));
     }
-    
+
     private void HandleTransaction(Action action)
     {
         if (_transaction == null)
@@ -154,8 +182,14 @@ public sealed class Database : IDisposable
         }
     }
 
+    #endregion
+
+    #region Destructor
+
     ~Database()
     {
         Dispose(false);
     }
+
+    #endregion
 }
