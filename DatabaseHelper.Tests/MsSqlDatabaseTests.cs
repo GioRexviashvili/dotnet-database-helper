@@ -15,6 +15,19 @@ public class MsSqlDatabaseTests
     public void OneTimeSetup()
     {
         _connectionString = "Server=localhost;Database=Test;User Id=sa;Password=***;TrustServerCertificate=True";
+
+        SqlConnection sqlConnection = new SqlConnection(_connectionString);
+        sqlConnection.Open();
+        using var command = sqlConnection.CreateCommand();
+        command.CommandText = @"
+if object_id('dbo.TestTable', 'U') is null
+create table dbo.TestTable (
+    Id int identity(1,1) primary key,
+    Name nvarchar(50) not null
+);";
+
+        command.ExecuteNonQuery();
+        sqlConnection.Close();
     }
 
     [SetUp]
@@ -204,13 +217,156 @@ public class MsSqlDatabaseTests
     #region ExecuteNonQuery Tests
 
     [Test]
+    public void ExecuteNonQuery_WithCommand_ReturnsAffectedRows()
+    {
+        _database.OpenConnection();
+        var affectedRows = _database.ExecuteNonQuery("insert into dbo.TestTable (Name) values ('Test1')");
+
+        Assert.That(affectedRows, Is.EqualTo(1));
+        Assert.That(_database.ExecuteScalar("select count(*) from dbo.TestTable where Name = 'Test1'"), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ExecuteNonQuery_AfterDispose_ThrowsObjectDisposedException()
+    {
+        _database.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => _database.ExecuteNonQuery("select 1"));
+    }
 
     #endregion
-    
+
+    #region ExecuteScalar Tests
+
+    [Test]
+    public void ExecuteScalar_AfterDispose_ThrowsObjectDisposedException()
+    {
+        _database.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => _database.ExecuteScalar("select 1"));
+    }
+
+    [Test]
+    public void ExecuteScalar_WithCommand_ReturnsScalar()
+    {
+        _connection = _database.GetConnection();
+        _database.OpenConnection();
+        var result = _database.ExecuteScalar("select 1");
+        Assert.That(result, Is.EqualTo(1));
+    }
+
+    #endregion
+
+    #region ExecuteReader Tests
+
+    [Test]
+    public void ExecuteReader_WithCommand_ReturnsDataReader()
+    {
+        _connection = _database.GetConnection();
+        _database.OpenConnection();
+        using var reader = _database.ExecuteReader("select * from dbo.TestTable");
+        Assert.That(reader, Is.Not.Null);
+        Assert.That(reader, Is.InstanceOf<SqlDataReader>());
+    }
+
+    [Test]
+    public void ExecuteReader_AfterDispose_ThrowsObjectDisposedException()
+    {
+        _database.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => _database.ExecuteReader("select * from dbo.TestTable"));
+    }
+
+    #endregion
+
+    #region Transaction Tests
+
+    [Test]
+    public void BeginTransaction_WithTransactionInProgress_ThrowsInvalidOperationException()
+    {
+        _database.OpenConnection();
+        _database.BeginTransaction();
+        Assert.Throws<InvalidOperationException>(() => _database.BeginTransaction());
+    }
+
+    [Test]
+    public void BeginTransaction_StartsTransaction() {
+        _database.OpenConnection();
+        _database.BeginTransaction();
+        Assert.That(_database.InTransaction, Is.True);
+    }
+
+    [Test]
+    public void BeginTransaction_AfterDispose_ThrowsObjectDisposedException()
+    {
+        _database.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => _database.BeginTransaction());
+    }
+
+    [Test]
+    public void CommitTransaction_AfterDispose_ThrowsInvalidOperationException()
+    {
+        _database.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => _database.CommitTransaction());
+    }
+
+    [Test]
+    public void CommitTransaction_WithoutTransactionInProgress_ThrowsInvalidOperationException()
+    {
+        Assert.Throws<InvalidOperationException>(() => _database.CommitTransaction());
+    }
+
+    [Test]
+    public void CommitTransaction_CommitsTransaction()
+    {
+        _database.OpenConnection();
+        _database.BeginTransaction();
+        _database.ExecuteNonQuery("insert into dbo.TestTable (Name) values ('Test2')");
+        _database.CommitTransaction();
+        var result = _database.ExecuteScalar("select count(*) from dbo.TestTable where Name = 'Test2'");
+        Assert.That(result, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void RollbackTransaction_WithoutTransactionInProgress_ThrowsInvalidOperationException()
+    {
+        Assert.Throws<InvalidOperationException>(() => _database.RollbackTransaction());
+    }
+
+    [Test]
+    public void RollbackTransaction_RollsBackTransaction()
+    {
+        _database.OpenConnection();
+        _database.BeginTransaction();
+        _database.ExecuteNonQuery("insert into dbo.TestTable (Name) values ('Test3')");
+        _database.RollbackTransaction();
+        var result = _database.ExecuteScalar("select count(*) from dbo.TestTable where Name = 'Test3'");
+        Assert.That(result, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void RollbackTransaction_AfterDispose_ThrowsInvalidOperationException()
+    {
+        _database.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => _database.RollbackTransaction());
+    }
+
+    #endregion
+
     [TearDown]
     public void TearDown()
     {
-        _connection.Dispose();
+        _connection?.Dispose();
         _database.Dispose();
+    }
+
+    [OneTimeTearDown]
+    public void OneTimeTearDown()
+    {
+        using (var sqlConnection = new SqlConnection(_connectionString))
+        {
+            sqlConnection.Open();
+            var command = sqlConnection.CreateCommand();
+            command.CommandText = "if object_id('dbo.TestTable', 'U') is not null drop table dbo.TestTable";
+            command.ExecuteNonQuery();
+            sqlConnection.Dispose();
+        }
     }
 }

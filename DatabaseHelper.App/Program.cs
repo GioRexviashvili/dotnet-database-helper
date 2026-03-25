@@ -31,13 +31,6 @@ internal static class Program
                 database.RollbackTransaction();
                 Console.WriteLine($"Transaction rolled back: {ex.Message}");
             }
-        } // Database.Dispose() gamoidzaxeba avtomaturad usingis blokis bolos
-
-        // DatabaseHelper.Core.Database coreDatabase = new Core.Database(connectionString, new SqlServerDatabaseFactory());
-        // coreDatabase.OpenConnection();
-        //
-        // coreDatabase.GetCommand("", CommandType.StoredProcedure, new SqlParameter[] { });
-        //
-        // coreDatabase.CloseConnection();
+        }
     }
 }
