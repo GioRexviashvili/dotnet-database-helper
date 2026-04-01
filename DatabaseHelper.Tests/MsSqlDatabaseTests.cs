@@ -14,7 +14,7 @@ public class MsSqlDatabaseTests
     [OneTimeSetUp]
     public void OneTimeSetup()
     {
-        _connectionString = "Server=localhost;Database=G12_Persons;User Id=sa;Password=Giorgigamer707;TrustServerCertificate=True";
+        _connectionString = "Server=localhost;Database=G12_Persons;User Id=sa;Password=***;TrustServerCertificate=True";
 
         SqlConnection sqlConnection = new SqlConnection(_connectionString);
         sqlConnection.Open();

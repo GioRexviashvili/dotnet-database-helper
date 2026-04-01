@@ -4,34 +4,32 @@ using System.Runtime.CompilerServices;
 
 namespace DatabaseHelper.Core;
 
-public abstract class CommonDatabase : IDisposable
+public abstract class CommonDatabase<T> : IDisposable where T : DbConnection, new()
 {
-    protected readonly string ConnectionString;
-    private DbConnection? _connection;
+    private readonly string _connectionString;
+    private T? _connection;
     private DbTransaction? _transaction;
     private bool _disposed;
 
     protected CommonDatabase(string connectionString)
     {
-        ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
-        if (string.IsNullOrWhiteSpace(ConnectionString))
+        _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+        if (string.IsNullOrWhiteSpace(connectionString))
             throw new ArgumentException("Connection string cannot be empty or whitespace.", nameof(connectionString));
     }
 
     public bool InTransaction => _transaction != null;
-    
-    protected abstract DbConnection CreateConnection();
 
-    public DbConnection GetConnection()
+    public T GetConnection()
     {
         ThrowIfDisposed();
-        return _connection ??= CreateConnection();
+        return _connection ??= new T { ConnectionString = _connectionString };
     }
 
     public void OpenConnection()
     {
         ThrowIfDisposed();
-        DbConnection connection = GetConnection();
+        var connection = GetConnection();
         if (connection.State != ConnectionState.Open)
             connection.Open();
     }
@@ -53,11 +51,11 @@ public abstract class CommonDatabase : IDisposable
         ArgumentNullException.ThrowIfNull(commandText);
         ArgumentException.ThrowIfNullOrWhiteSpace(commandText);
 
-        DbCommand command = GetConnection().CreateCommand();
+        var command = GetConnection().CreateCommand();
         command.CommandText = commandText;
         command.CommandType = commandType;
         command.Parameters.AddRange(parameters);
-        
+
         if (_transaction != null)
             command.Transaction = _transaction;
 
@@ -69,7 +67,7 @@ public abstract class CommonDatabase : IDisposable
 
     public int ExecuteNonQuery(string commandText, CommandType commandType, params DbParameter[] parameters)
     {
-        using DbCommand command = GetCommand(commandText, commandType, parameters);
+        using var command = GetCommand(commandText, commandType, parameters);
         return command.ExecuteNonQuery();
     }
 
@@ -78,7 +76,7 @@ public abstract class CommonDatabase : IDisposable
 
     public object? ExecuteScalar(string commandText, CommandType commandType, params DbParameter[] parameters)
     {
-        using DbCommand command = GetCommand(commandText, commandType, parameters);
+        using var command = GetCommand(commandText, commandType, parameters);
         return command.ExecuteScalar();
     }
 
@@ -87,7 +85,7 @@ public abstract class CommonDatabase : IDisposable
 
     public DbDataReader ExecuteReader(string commandText, CommandType commandType, params DbParameter[] parameters)
     {
-        DbCommand command = GetCommand(commandText, commandType, parameters);
+        var command = GetCommand(commandText, commandType, parameters);
         return command.ExecuteReader();
     }
 
@@ -98,7 +96,8 @@ public abstract class CommonDatabase : IDisposable
     {
         ThrowIfDisposed();
         if (_transaction != null)
-            throw new InvalidOperationException("Transaction is already started. Commit or rollback the current transaction before starting a new one.");
+            throw new InvalidOperationException(
+                "Transaction is already started. Commit or rollback the current transaction before starting a new one.");
         _transaction = GetConnection().BeginTransaction();
     }
 
@@ -132,6 +131,7 @@ public abstract class CommonDatabase : IDisposable
             _connection?.Dispose();
             _connection = null;
         }
+
         _disposed = true;
     }
 
@@ -156,7 +156,7 @@ public abstract class CommonDatabase : IDisposable
     private void ThrowIfDisposed()
     {
         if (_disposed)
-            throw new ObjectDisposedException(nameof(CommonDatabase));
+            throw new ObjectDisposedException(nameof(CommonDatabase<T>));
     }
 
     ~CommonDatabase()
