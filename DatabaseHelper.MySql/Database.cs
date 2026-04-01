@@ -1,50 +1,36 @@
 ﻿using System.Data;
+using System.Runtime.CompilerServices;
 using DatabaseHelper.Core;
-using Microsoft.Data.SqlClient;
+using MySql.Data.MySqlClient;
 
-namespace DatabaseHelper.MsSql;
+namespace DatabaseHelper.MySql;
 
 public sealed class Database : CommonDatabase
 {
-    #region Private Fields
-
     private readonly string _connectionString;
-    private SqlConnection? _connection;
-    private SqlTransaction? _transaction;
+    private MySqlConnection? _connection;
+    private MySqlTransaction? _transaction;
     private bool _disposed = false;
-
-    #endregion
-
-    #region Ctor
 
     public Database(string connectionString)
     {
-        ArgumentNullException.ThrowIfNull(connectionString, nameof(connectionString));
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString, nameof(connectionString));
-        _connectionString = connectionString;
+        _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
     }
-
-    #endregion
-
-    #region Public Properties
 
     public bool InTransaction => _transaction != null;
 
-    #endregion
-
-    #region Public Methods
-
-    public SqlConnection GetConnection()
+    public MySqlConnection GetConnection()
     {
         ThrowIfDisposed();
-        _connection ??= new SqlConnection(_connectionString);
+        if (_connection == null)
+            _connection = new MySqlConnection(_connectionString);
         return _connection;
     }
 
     public void OpenConnection()
     {
         ThrowIfDisposed();
-        var connection = GetConnection();
+        MySqlConnection connection = GetConnection();
         if (connection.State != ConnectionState.Open)
             connection.Open();
     }
@@ -60,14 +46,12 @@ public sealed class Database : CommonDatabase
             _connection?.Close();
     }
 
-    public SqlCommand GetCommand(string commandText, CommandType commandType, params SqlParameter[] parameters)
+    public MySqlCommand GetCommand(string commandText, CommandType commandType, params MySqlParameter[] parameters)
     {
         ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(commandText, nameof(commandText));
 
-        ArgumentNullException.ThrowIfNull(commandText);
-        ArgumentException.ThrowIfNullOrWhiteSpace(commandText);
-
-        SqlCommand command = GetConnection().CreateCommand();
+        MySqlCommand command = GetConnection().CreateCommand();
         command.CommandText = commandText;
         command.CommandType = commandType;
         command.Parameters.AddRange(parameters);
@@ -80,59 +64,54 @@ public sealed class Database : CommonDatabase
         return command;
     }
 
-    public SqlCommand GetCommand(string commandText, params SqlParameter[] parameters)
+    public MySqlCommand GetCommand(string commandText, params MySqlParameter[] parameters)
         => GetCommand(commandText, CommandType.Text, parameters);
 
-    public int ExecuteNonQuery(string commandText, CommandType commandType, params SqlParameter[] parameters)
+    public int ExecuteNonQuery(string commandText, CommandType commandType, params MySqlParameter[] parameters)
     {
-        ThrowIfDisposed();
-        using SqlCommand command = GetCommand(commandText, commandType, parameters);
+        using MySqlCommand command = GetCommand(commandText, commandType, parameters);
         return command.ExecuteNonQuery();
     }
 
-    public int ExecuteNonQuery(string commandText, params SqlParameter[] parameters)
+    public int ExecuteNonQuery(string commandText, params MySqlParameter[] parameters)
         => ExecuteNonQuery(commandText, CommandType.Text, parameters);
 
-    public object? ExecuteScalar(string commandText, CommandType commandType, params SqlParameter[] parameters)
+    public object? ExecuteScalar(string commandText, CommandType commandType, params MySqlParameter[] parameters)
     {
-        ThrowIfDisposed();
-        using SqlCommand command = GetCommand(commandText, commandType, parameters);
+        using MySqlCommand command = GetCommand(commandText, commandType, parameters);
         return command.ExecuteScalar();
     }
 
-    public object? ExecuteScalar(string commandText, params SqlParameter[] parameters)
+    public object? ExecuteScalar(string commandText, params MySqlParameter[] parameters)
         => ExecuteScalar(commandText, CommandType.Text, parameters);
 
-    public SqlDataReader ExecuteReader(string commandText, CommandType commandType, params SqlParameter[] parameters)
+    public MySqlDataReader ExecuteReader(string commandText, CommandType commandType, params MySqlParameter[] parameters)
     {
-        ThrowIfDisposed();
-        SqlCommand command = GetCommand(commandText, commandType, parameters);
+        MySqlCommand command = GetCommand(commandText, commandType, parameters);
         return command.ExecuteReader();
     }
 
-    public SqlDataReader ExecuteReader(string commandText, params SqlParameter[] parameters)
+    public MySqlDataReader ExecuteReader(string commandText, params MySqlParameter[] parameters)
         => ExecuteReader(commandText, CommandType.Text, parameters);
 
     public void BeginTransaction()
     {
         ThrowIfDisposed();
         if (_transaction != null)
-            throw new InvalidOperationException(
-                "Transaction is already started. Commit or rollback the current transaction before starting a new one.");
-
+            throw new InvalidOperationException("Transaction is already started. Commit or rollback the current transaction before starting a new one.");
         _transaction = GetConnection().BeginTransaction();
     }
 
     public void CommitTransaction()
     {
         ThrowIfDisposed();
-        HandleTransaction(() => _transaction?.Commit());
+        HandleTransaction(() => _transaction!.Commit());
     }
 
     public void RollbackTransaction()
     {
         ThrowIfDisposed();
-        HandleTransaction(() => _transaction?.Rollback());
+        HandleTransaction(() => _transaction!.Rollback());
     }
 
     public void Dispose()
@@ -140,10 +119,6 @@ public sealed class Database : CommonDatabase
         Dispose(true);
         GC.SuppressFinalize(this);
     }
-
-    #endregion
-
-    #region Private Methods
 
     private void Dispose(bool disposing)
     {
@@ -153,18 +128,14 @@ public sealed class Database : CommonDatabase
         if (disposing)
         {
             _transaction?.Dispose();
+            _transaction = null;
             _connection?.Dispose();
+            _connection = null;
         }
-
         _disposed = true;
     }
 
-    private void ThrowIfDisposed()
-    {
-        if (!_disposed) return;
-        throw new ObjectDisposedException(nameof(Database));
-    }
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void HandleTransaction(Action action)
     {
         if (_transaction == null)
@@ -177,17 +148,19 @@ public sealed class Database : CommonDatabase
         finally
         {
             _transaction.Dispose();
+            _transaction = null;
         }
     }
 
-    #endregion
-
-    #region Destructor
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(Database));
+    }
 
     ~Database()
     {
         Dispose(false);
     }
-
-    #endregion
 }
