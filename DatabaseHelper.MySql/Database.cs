@@ -4,4 +4,4 @@ using MySql.Data.MySqlClient;
 
 namespace DatabaseHelper.MySql;
 
-public sealed class Database(string connectionString) : CommonDatabase<MySqlConnection>(connectionString);
+public sealed class Database(string connectionString) : CommonDatabase<MySqlConnection, MySqlCommand, MySqlTransaction, MySqlDataReader, MySqlParameter>(connectionString);

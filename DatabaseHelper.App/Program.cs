@@ -1,8 +1,4 @@
-﻿using System.Data.Common;
-using DatabaseHelper.Core;
-using Microsoft.Data.SqlClient;
-
-namespace DatabaseHelper.App;
+﻿namespace DatabaseHelper.App;
 
 internal static class Program
 {
@@ -19,7 +15,6 @@ internal static class Program
         var con2 = database2.GetConnection(); // con2 automatically is type of MySqlConnection and not DbConnection :)
         con2.OpenAsync();
         
-        var command1 = database.GetCommand("select 1"); // but here command1 is type of DbCommand (not SqlCommand) :(
-                                                        // there is a problem when I add generic for command
+        var command1 = database.GetCommand("select 1"); // same here for command
     }
 }

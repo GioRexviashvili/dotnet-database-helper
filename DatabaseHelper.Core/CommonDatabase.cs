@@ -4,11 +4,17 @@ using System.Runtime.CompilerServices;
 
 namespace DatabaseHelper.Core;
 
-public abstract class CommonDatabase<T> : IDisposable where T : DbConnection, new()
+public abstract class CommonDatabase<TConnection, TCommand, TTransaction, TDataReader, TParameter> : IDisposable
+    where TConnection : class, IDbConnection, new()
+    where TCommand : class, IDbCommand
+    where TTransaction : class, IDbTransaction
+    where TDataReader : class, IDataReader
+    where TParameter : class, IDbDataParameter
 {
-    private readonly string _connectionString;
-    private T? _connection;
-    private DbTransaction? _transaction;
+    private readonly string? _connectionString;
+    private readonly Func<TConnection>? _connectionFactory;
+    private TConnection? _connection;
+    private TTransaction? _transaction;
     private bool _disposed;
 
     protected CommonDatabase(string connectionString)
@@ -18,12 +24,23 @@ public abstract class CommonDatabase<T> : IDisposable where T : DbConnection, ne
             throw new ArgumentException("Connection string cannot be empty or whitespace.", nameof(connectionString));
     }
 
+    protected CommonDatabase(Func<TConnection> connectionFactory)
+    {
+        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+    }
+
     public bool InTransaction => _transaction != null;
 
-    public T GetConnection()
+    public TConnection GetConnection()
     {
         ThrowIfDisposed();
-        return _connection ??= new T { ConnectionString = _connectionString };
+
+        if (_connection != null)
+            return _connection;
+
+        return _connectionFactory == null
+            ? new TConnection { ConnectionString = _connectionString }
+            : _connectionFactory();
     }
 
     public void OpenConnection()
@@ -45,16 +62,20 @@ public abstract class CommonDatabase<T> : IDisposable where T : DbConnection, ne
             _connection?.Close();
     }
 
-    public DbCommand GetCommand(string commandText, CommandType commandType, params DbParameter[] parameters)
+    public TCommand GetCommand(string commandText, CommandType commandType, params TParameter[] parameters)
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(commandText);
         ArgumentException.ThrowIfNullOrWhiteSpace(commandText);
 
-        var command = GetConnection().CreateCommand();
+        var command = (TCommand)GetConnection().CreateCommand();
         command.CommandText = commandText;
         command.CommandType = commandType;
-        command.Parameters.AddRange(parameters);
+
+        foreach (var parameter in parameters)
+        {
+            command.Parameters.Add(parameter);
+        }
 
         if (_transaction != null)
             command.Transaction = _transaction;
@@ -62,34 +83,34 @@ public abstract class CommonDatabase<T> : IDisposable where T : DbConnection, ne
         return command;
     }
 
-    public DbCommand GetCommand(string commandText, params DbParameter[] parameters)
+    public TCommand GetCommand(string commandText, params TParameter[] parameters)
         => GetCommand(commandText, CommandType.Text, parameters);
 
-    public int ExecuteNonQuery(string commandText, CommandType commandType, params DbParameter[] parameters)
+    public int ExecuteNonQuery(string commandText, CommandType commandType, params TParameter[] parameters)
     {
         using var command = GetCommand(commandText, commandType, parameters);
         return command.ExecuteNonQuery();
     }
 
-    public int ExecuteNonQuery(string commandText, params DbParameter[] parameters)
+    public int ExecuteNonQuery(string commandText, params TParameter[] parameters)
         => ExecuteNonQuery(commandText, CommandType.Text, parameters);
 
-    public object? ExecuteScalar(string commandText, CommandType commandType, params DbParameter[] parameters)
+    public object? ExecuteScalar(string commandText, CommandType commandType, params TParameter[] parameters)
     {
         using var command = GetCommand(commandText, commandType, parameters);
         return command.ExecuteScalar();
     }
 
-    public object? ExecuteScalar(string commandText, params DbParameter[] parameters)
+    public object? ExecuteScalar(string commandText, params TParameter[] parameters)
         => ExecuteScalar(commandText, CommandType.Text, parameters);
 
-    public DbDataReader ExecuteReader(string commandText, CommandType commandType, params DbParameter[] parameters)
+    public TDataReader ExecuteReader(string commandText, CommandType commandType, params TParameter[] parameters)
     {
         var command = GetCommand(commandText, commandType, parameters);
-        return command.ExecuteReader();
+        return (TDataReader)command.ExecuteReader();
     }
 
-    public DbDataReader ExecuteReader(string commandText, params DbParameter[] parameters)
+    public TDataReader ExecuteReader(string commandText, params TParameter[] parameters)
         => ExecuteReader(commandText, CommandType.Text, parameters);
 
     public void BeginTransaction()
@@ -98,7 +119,7 @@ public abstract class CommonDatabase<T> : IDisposable where T : DbConnection, ne
         if (_transaction != null)
             throw new InvalidOperationException(
                 "Transaction is already started. Commit or rollback the current transaction before starting a new one.");
-        _transaction = GetConnection().BeginTransaction();
+        _transaction = (TTransaction)GetConnection().BeginTransaction();
     }
 
     public void CommitTransaction()
@@ -156,7 +177,8 @@ public abstract class CommonDatabase<T> : IDisposable where T : DbConnection, ne
     private void ThrowIfDisposed()
     {
         if (_disposed)
-            throw new ObjectDisposedException(nameof(CommonDatabase<T>));
+            throw new ObjectDisposedException(
+                nameof(CommonDatabase<TConnection, TCommand, TTransaction, TDataReader, TParameter>));
     }
 
     ~CommonDatabase()
